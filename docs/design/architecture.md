@@ -241,10 +241,12 @@ before the head, so it gets its gradient through the head.
 The script holds out up to 400 items (10% of the data, at a fixed seed) before sharding the
 rest across the two GPUs, so no training batch ever contains them. After the last epoch, rank
 0 runs the trained model on those items in eval mode, without gradients. It then fits
-temperatures with `laya.calibrate.fit_temperature_map`: one per question type, and one per
-option-count bucket where a bucket has enough items. The values are written to the config as
-`temperature` and `temperature_by_options`, replacing the inherited ones. The weights are not
-touched in this step.
+temperatures with `laya.calibrate.fit_temperature_map`: one per question type with at least 10
+items. A bucket temperature needs at least 2,000 items in its bucket, which a 400-item slice
+never reaches. The fitted values replace the config's `temperature`, and the inherited
+`temperature_by_options` are removed so they cannot override the new fit. The weights are not
+touched in this step. The details are in
+[Calibration is part of the run](../finetune.md#calibration-is-part-of-the-run).
 
 ### What the fine-tuned checkpoint carries
 
