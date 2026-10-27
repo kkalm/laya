@@ -176,6 +176,39 @@ inference reads only the config values.
 | Act head | 263,938 | 0.1% |
 | Total | 421,293,827 | |
 
+## Inspecting the architecture yourself
+
+`scripts/visualise_model.py` loads a checkpoint on CPU and shows its layers in one of two
+local viewers. Neither viewer is a dependency of the package, so install the one you use:
+
+```bash
+pip install ai-edge-model-explorer   # interactive graph
+pip install torchinfo                # layer table
+
+python scripts/visualise_model.py                     # Model Explorer on http://127.0.0.1:8080
+python scripts/visualise_model.py --summary           # torchinfo table, printed to the terminal
+python scripts/visualise_model.py --summary --depth 3 # also list every encoder and head layer
+python scripts/visualise_model.py --model convaiinnovations/laya-multilingual --port 8081
+```
+
+- With no flags, the model is exported with `torch.export` and served in Google's
+  [Model Explorer](https://github.com/google-ai-edge/model-explorer). About 1,900 operations are
+  grouped into 95 collapsible layers, named after the modules on this page. Expand
+  `laya.common.DecisionModel` to see the encoder, the type-embedding add, the two head layers,
+  the marker gather, the scorer and the act head's inputs in order. Expand any layer to see its
+  operations. The server runs until you press Ctrl+C.
+- `--summary` prints each module's output shape and parameter count, the numbers in the
+  [parameter budget](#parameter-budget-laya) above. `--depth` sets how many module levels the
+  table expands (default 2).
+
+The graph is traced from a single example input: a choice question with three options, 26
+tokens on `laya`. Shapes in the viewer are that example's, but the layers are the same for any
+input. The first run downloads the checkpoint, about 0.85 GB for `laya`.
+
+TensorBoard's graph view (`SummaryWriter.add_graph`) also works on this model. It shows about
+2,200 low-level operations with little grouping, and it relies on `torch.jit.trace`, which
+PyTorch has deprecated, so the script does not use it.
+
 ## Training
 
 This section covers what the notebook's training script (`train_ddp.py`, built on `laya.train`)
