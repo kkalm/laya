@@ -283,11 +283,32 @@ temperatures on items the run has already trained on measures the fit rather tha
 calibration — the model is near-certain and near-correct on them, so the optimiser has nothing
 to soften and returns a degenerate scale.
 
-After the last epoch, rank 0 fits **one temperature per question type** (`choice`, `score`,
-`noul`) by LBFGS on the log-temperature, clamped to `[0.1, 10]` (`1.0` for a slice under ten
-items, `1.2` if the fit raises). The values go into `rl_agent_config.json` as `temperature`,
-and the notebook **removes any inherited `temperature_by_options`** in the same write: those
-old bucket values take precedence at inference and would silently mask the new fit.
+After the last epoch, rank 0 runs the trained model over the slice in eval mode and passes the
+logits to `laya.calibrate.fit_temperature_map`. This is the same fitter `laya-train` and
+`Agent.fit_temperatures` use. It fits by LBFGS on the log-temperature, minimising
+cross-entropy against the gold distributions:
+
+- **One temperature per question type** (`choice`, `score`, `noul`) for any type with at least
+  10 items in the slice. A type with fewer keeps `1.0`.
+- **One per option-count bucket** (`choice:3-5`, `noul:2`, …) only for a bucket with at least
+  2,000 items. A 400-item slice never fills a bucket, so in the notebook the fit returns
+  type-level temperatures only.
+
+Every value is clamped to `[0.5, 5.0]`, the same bounds `laya.load` applies when it reads a
+checkpoint, so what the fit writes is what inference uses. Any fit the clamp moved is listed
+under `temperature_clamped` in the result. The notebook prints only the fitted values, so if
+one lands exactly on a bound, check that key to see how far the fit wanted to go.
+
+The values go into `rl_agent_config.json` as `temperature`. The notebook **removes any
+inherited `temperature_by_options`** in the same write and writes back only the buckets the new
+fit produced. This matters because inference looks up a question's bucket first and falls back
+to the type-level value only when the bucket is missing. Old bucket values left in place would
+silently mask the new fit.
+
+If the fit raises an error, the notebook prints `Temperature fitting fallback:` and saves the
+checkpoint with the base model's temperatures, bucket overrides included. Those values were
+fitted for the base model, not the fine-tuned one, so refit before relying on confidence from
+such a run.
 
 Temperature scaling leaves the argmax — and accuracy — unchanged; what moves is the
 confidence. The checkpoints as shipped are over-confident, so fit before relying on any
